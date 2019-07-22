@@ -17,11 +17,15 @@ from wagtail.core.models import Page
 
 from opentech.apply.funds.models import ApplicationSubmission, Round, ScreeningStatus
 from opentech.apply.funds.workflow import STATUSES, get_review_active_statuses
+from opentech.apply.review.models import Review
 from opentech.apply.users.groups import STAFF_GROUP_NAME
 from opentech.apply.utils.image import generate_image_tag
 from opentech.images.models import CustomImage
 
 from .widgets import Select2MultiCheckboxesWidget
+
+
+User = get_user_model()
 
 
 def review_filter_for_user(user):
@@ -173,13 +177,11 @@ def get_used_funds(request):
 
 
 def get_round_leads(request):
-    User = get_user_model()
     return User.objects.filter(submission_lead__isnull=False).distinct()
 
 
 def get_reviewers(request):
     """ All assigned reviewers, staff or admin """
-    User = get_user_model()
     return User.objects.filter(Q(submissions_reviewer__isnull=False) | Q(groups__name=STAFF_GROUP_NAME) | Q(is_superuser=True)).distinct()
 
 
@@ -355,3 +357,33 @@ class RoundsFilter(filters.FilterSet):
     lead = Select2ModelMultipleChoiceFilter(queryset=get_round_leads, label='Leads')
     active = ActiveRoundFilter(label='Active')
     round_state = OpenRoundFilter(label='Open')
+
+
+class LeaderboardTable(tables.Table):
+    full_name = tables.Column(verbose_name="Reviewer")
+
+    class Meta:
+        fields = [
+            'full_name',
+            'total',
+            'ninety_days',
+            'this_year',
+            'last_year',
+            'most_recent',
+        ]
+        model = User
+        orderable = False
+
+    def render_most_recent(self, record):
+        review = (Review.objects.filter(author__reviewer=record)
+                                .order_by('-created_at')
+                                .first())
+
+        if review is None:
+            return None
+
+        return format_html(
+            '<a href="{}">{}</a>',
+            review.revision.submission.get_absolute_url(),
+            review.revision.submission.title,
+        )
