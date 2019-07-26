@@ -26,12 +26,12 @@ from opentech.apply.funds.tests.factories import (
 )
 from opentech.apply.review.tests.factories import ReviewFactory
 from opentech.apply.users.tests.factories import (
+    ReviewerFactory,
+    StaffFactory,
+    SuperUserFactory,
     ApplicantFactory,
     CommunityReviewerFactory,
     PartnerFactory,
-    ReviewerFactory,
-    StaffFactory,
-    SuperUserFactory
 )
 from opentech.apply.utils.testing import make_request
 from opentech.apply.utils.testing.tests import BaseViewTestCase
