@@ -55,6 +55,7 @@ neat_related = {
     MESSAGES.SCREENING: 'old_status',
     MESSAGES.REVIEW_OPINION: 'opinion',
     MESSAGES.DELETE_REVIEW: 'review',
+    MESSAGES.UPDATE_PROJECT_LEAD: 'old_lead',
     MESSAGES.EDIT_REVIEW: 'review',
 }
 
@@ -370,6 +371,8 @@ class SlackAdapter(AdapterBase):
         MESSAGES.BATCH_READY_FOR_REVIEW: 'batch_notify_reviewers',
         MESSAGES.DELETE_SUBMISSION: '{user} has deleted {submission.title}',
         MESSAGES.DELETE_REVIEW: '{user} has deleted {review.author} review for <{link}|{submission.title}>.',
+        MESSAGES.CREATED_PROJECT: '{user} has created a Project: <{link}|{project.name}>.',
+        MESSAGES.UPDATE_PROJECT_LEAD: 'The lead of project <{link}|{project.name}> has been updated from {old_lead} to {project.lead} by {user}',
         MESSAGES.EDIT_REVIEW: '{user} has edited {review.author} review for <{link}|{submission.title}>.',
     }
 
