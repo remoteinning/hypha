@@ -1,21 +1,30 @@
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 from django.urls import reverse
 
 
 class Project(models.Model):
-    lead = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    lead = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='lead_projects')
     submission = models.OneToOneField("funds.ApplicationSubmission", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='owned_projects')
 
-    name = models.TextField()
+    title = models.TextField()
 
     contact_legal_name = models.TextField(default='')
     contact_email = models.TextField(default='')
     contact_address = models.TextField(default='')
     value = models.DecimalField(default=0, max_digits=10, decimal_places=2)
 
+    activities = GenericRelation(
+        'activity.Activity',
+        content_type_field='source_content_type',
+        object_id_field='source_object_id',
+        related_query_name='project',
+    )
+
     def __str__(self):
-        return self.name
+        return self.title
 
     @classmethod
     def create_from_submission(cls, submission):
@@ -33,7 +42,8 @@ class Project(models.Model):
 
         return Project.objects.create(
             submission=submission,
-            name=submission.title,
+            title=submission.title,
+            user=submission.user,
             contact_email=submission.user.email,
             contact_legal_name=submission.user.full_name,
             contact_address=submission.form_data.get('address', ''),
