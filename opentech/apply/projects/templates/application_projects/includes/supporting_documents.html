@@ -17,11 +17,26 @@
 
         <li class="docs-block__row">
             <div class="docs-block__row-inner">
-                <svg class="icon docs-block__icon"><use xlink:href="#tick"></use></svg>
+                <svg class="icon docs-block__icon{% if object.user_has_updated_details %} is-complete{% endif %}">
+                    <use xlink:href="#tick"></use>
+                </svg>
                 <p class="docs-block__title">Approval Form</p>
             </div>
             <div class="docs-block__row-inner">
-                <a class="docs-block__link" href="#">Create</a>
+                {% if object.editable %}
+                    <a class="docs-block__link" href="{% url 'apply:projects:edit' pk=object.pk %}">
+                        {% if object.user_has_updated_details %}
+                        Edit
+                        {% else %}
+                        Create
+                        {% endif %}
+                    </a>
+                {% endif %}
+                {% if object.user_has_updated_details %}
+                    <a class="docs-block__link" href="#">
+                        View
+                    </a>
+                {% endif %}
             </div>
         </li>
 
@@ -30,10 +45,23 @@
                 <svg class="icon docs-block__icon"><use xlink:href="#tick"></use></svg>
                 <p class="docs-block__title">Supporting documents</p>
             </div>
-            <div class="docs-block__row-inner">
-                <a data-fancybox data-src="#upload-supporting-doc" class="docs-block__link" href="#">Upload new</a>
+            {% if object.editable %}
+                <div class="docs-block__row-inner">
+                    <a data-fancybox data-src="#upload-supporting-doc" class="docs-block__link" href="#">Upload new</a>
+                </div>
+            {% endif %}
+            {% if remaining_document_categories %}
+            <div class="docs-block__info-text">
+                <p>
+                    Every project should include the following documents:
+                </p>
+                <ul>
+                    {% for category in remaining_document_categories %}
+                        <li>{{ category.name }} ({{ category.recommended_minimum }})</li>
+                    {% endfor %}
+                </ul>
             </div>
-            <p class="docs-block__info-text">Every project requires a XXXXXX and XXXXXX to be uploaded</p>
+            {% endif %}
             <!-- Example document list
                 <ul class="docs-block__document-list">
                     <li class="docs-block__document">
@@ -61,12 +89,19 @@
         </li>
     </ul>
     <div class="docs-block__buttons">
-        <button class="button button--primary" href="#">Submit for approval</button>
-        <button class="button button--primary" href="#">Ready for contracting</button>
+        {% if object.can_send_for_approval %}
+            <a data-fancybox
+            data-src="#send-for-approval"
+            class="button button--primary"
+            href="#">
+                Submit for Approval
+            </a>
+        {% endif %}
+        <!-- <button class="button button--primary" href="#">Ready for contracting</button> -->
     </div>
 </div>
 
-<div class="modal modal--secondary" id="upload-supporting-doc">
+<div class="modal" id="upload-supporting-doc">
     <h4 class="modal__header-bar">Upload a new document</h4>
     <div class="wrapper--outer-space-medium">
         <label for="upload-document">Choose a document to upload:</label>
