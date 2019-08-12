@@ -1,5 +1,9 @@
+import collections
 import decimal
+import json
+import logging
 
+from addressfield.fields import ADDRESS_FIELDS_ORDER
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ValidationError
@@ -7,6 +11,8 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import ugettext as _
+
+logger = logging.getLogger(__name__)
 
 
 class Approval(models.Model):
@@ -20,6 +26,33 @@ class Approval(models.Model):
 
     def __str__(self):
         return f'Approval of "{self.project.title}" by {self.by}'
+
+
+def document_path(instance, filename):
+    return f'projects/{instance.project_id}/supporting_documents/{filename}'
+
+
+class PacketFile(models.Model):
+    category = models.ForeignKey("DocumentCategory", null=True, on_delete=models.CASCADE, related_name="packet_files")
+    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="packet_files")
+
+    title = models.TextField()
+    document = models.FileField(upload_to=document_path)
+
+    def __str__(self):
+        return f'Project file: {self.title}'
+
+    def get_remove_form(self):
+        """
+        Get an instantiated RemoveDocumentForm with this class as `instance`.
+
+        This allows us to build instances of the RemoveDocumentForm for each
+        instance of PacketFile in the supporting documents template.  The
+        standard Delegated View flow makes it difficult to create these forms
+        in the view or template.
+        """
+        from .forms import RemoveDocumentForm
+        return RemoveDocumentForm(instance=self)
 
 
 COMMITTED = 'committed'
@@ -72,6 +105,14 @@ class Project(models.Model):
     def __str__(self):
         return self.title
 
+    def get_address_display(self):
+        address = json.loads(self.contact_address)
+        return ', '.join(
+            address.get(field)
+            for field in ADDRESS_FIELDS_ORDER
+            if address.get(field)
+        )
+
     @classmethod
     def create_from_submission(cls, submission):
         """
@@ -80,6 +121,10 @@ class Project(models.Model):
         Returns a new Project or the given ApplicationSubmissions existing
         Project.
         """
+        if not settings.PROJECTS_ENABLED:
+            logging.error(f'Tried to create a Project for Submission ID={submission.id} while projects are disabled')
+            return None
+
         # OneToOne relations on the targetted model cannot be accessed without
         # an exception when the relation doesn't exist (is None).  Since we
         # want to fail fast here, we can use hasattr instead.
@@ -106,6 +151,14 @@ class Project(models.Model):
         if self.proposed_start > self.proposed_end:
             raise ValidationError(_('Proposed End Date must be after Proposed Start Date'))
 
+    def editable_by(self, user):
+        if self.editable:
+            return True
+
+        # Approver can edit it when they are approving
+        return user.is_approver and self.can_make_approval
+
+    @property
     def editable(self):
         # Someone must lead the project to make changes
         return self.lead and not self.is_locked
@@ -128,6 +181,24 @@ class Project(models.Model):
         """
         correct_state = self.status == COMMITTED and not self.is_locked
         return correct_state and self.user_has_updated_details
+
+    def get_missing_document_categories(self):
+        """
+        Get the number of documents required to meet each DocumentCategorys minimum
+        """
+        # Count the number of documents in each category currently
+        existing_categories = DocumentCategory.objects.filter(packet_files__project=self)
+        counter = collections.Counter(existing_categories)
+
+        # Find the difference between the current count and recommended count
+        for category in DocumentCategory.objects.all():
+            current_count = counter[category]
+            difference = category.recommended_minimum - current_count
+            if difference > 0:
+                yield {
+                    'category': category,
+                    'difference': difference,
+                }
 
 
 class DocumentCategory(models.Model):

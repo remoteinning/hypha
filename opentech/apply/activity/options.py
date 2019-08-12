@@ -32,6 +32,8 @@ class MESSAGES(Enum):
     SEND_FOR_APPROVAL = 'Send for Approval'
     APPROVE_PROJECT = 'Project was Approved'
     REQUEST_PROJECT_CHANGE = 'Project change requested'
+    UPLOAD_DOCUMENT = 'Document was Uploaded to Project'
+    REMOVE_DOCUMENT = 'Document was Removed from Project'
 
     @classmethod
     def choices(cls):

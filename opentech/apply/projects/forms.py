@@ -5,7 +5,7 @@ from addressfield.fields import AddressField
 from opentech.apply.funds.models import ApplicationSubmission
 from opentech.apply.users.groups import STAFF_GROUP_NAME
 
-from .models import COMMITTED, Approval, Project
+from .models import COMMITTED, Approval, PacketFile, Project
 
 
 class CreateProjectForm(forms.Form):
@@ -61,6 +61,8 @@ class ProjectEditForm(forms.ModelForm):
             'proposed_start': forms.DateInput,
         }
 
+
+class ProjectApprovalForm(ProjectEditForm):
     def save(self, *args, **kwargs):
         self.instance.user_has_updated_details = True
         return super().save(*args, **kwargs)
@@ -70,6 +72,17 @@ class RejectionForm(forms.Form):
     comment = forms.CharField(widget=forms.Textarea)
 
     def __init__(self, instance=None, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+class RemoveDocumentForm(forms.ModelForm):
+    id = forms.IntegerField(widget=forms.HiddenInput())
+
+    class Meta:
+        fields = ['id']
+        model = PacketFile
+
+    def __init__(self, user=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
@@ -94,6 +107,16 @@ class SetPendingForm(forms.ModelForm):
     def save(self, *args, **kwargs):
         self.instance.is_locked = True
         return super().save(*args, **kwargs)
+
+
+class UploadDocumentForm(forms.ModelForm):
+    class Meta:
+        fields = ['title', 'category', 'document']
+        model = PacketFile
+        widgets = {'title': forms.TextInput()}
+
+    def __init__(self, user=None, instance=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 
 class UpdateProjectLeadForm(forms.ModelForm):

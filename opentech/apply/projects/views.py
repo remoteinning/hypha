@@ -1,9 +1,12 @@
 from copy import copy
 
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
-from django.views.generic import CreateView, DetailView, UpdateView
+from django.utils.translation import ugettext_lazy as _
+from django.views.generic import CreateView, DetailView, FormView, UpdateView
 
 from opentech.apply.activity.messaging import MESSAGES, messenger
 from opentech.apply.activity.views import ActivityContextMixin, CommentFormView
@@ -11,9 +14,17 @@ from opentech.apply.users.decorators import staff_required
 from opentech.apply.utils.views import (DelegateableView, DelegatedViewMixin,
                                         ViewDispatcher)
 
-from .forms import (CreateApprovalForm, ProjectEditForm, RejectionForm,
-                    SetPendingForm, UpdateProjectLeadForm)
-from .models import CONTRACTING, Approval, DocumentCategory, Project
+from .forms import (
+    CreateApprovalForm,
+    ProjectApprovalForm,
+    ProjectEditForm,
+    RejectionForm,
+    RemoveDocumentForm,
+    SetPendingForm,
+    UpdateProjectLeadForm,
+    UploadDocumentForm,
+)
+from .models import CONTRACTING, Approval, Project, PacketFile
 
 
 @method_decorator(staff_required, name='dispatch')
@@ -64,6 +75,24 @@ class RejectionView(DelegatedViewMixin, UpdateView):
 
 
 @method_decorator(staff_required, name='dispatch')
+class RemoveDocumentView(DelegatedViewMixin, FormView):
+    context_name = 'remove_document_form'
+    form_class = RemoveDocumentForm
+    model = Project
+
+    def form_valid(self, form):
+        document_id = form.cleaned_data["id"]
+        project = self.kwargs['object']
+
+        try:
+            project.packet_files.get(pk=document_id).delete()
+        except PacketFile.DoesNotExist:
+            pass
+
+        return redirect(project)
+
+
+@method_decorator(staff_required, name='dispatch')
 class SendForApprovalView(DelegatedViewMixin, UpdateView):
     context_name = 'request_approval_form'
     form_class = SetPendingForm
@@ -106,13 +135,37 @@ class UpdateLeadView(DelegatedViewMixin, UpdateView):
         return response
 
 
+@method_decorator(staff_required, name='dispatch')
+class UploadDocumentView(DelegatedViewMixin, CreateView):
+    context_name = 'document_form'
+    form_class = UploadDocumentForm
+    model = Project
+
+    def form_valid(self, form):
+        project = self.kwargs['object']
+        form.instance.project = project
+        response = super().form_valid(form)
+
+        messenger(
+            MESSAGES.UPLOAD_DOCUMENT,
+            request=self.request,
+            user=self.request.user,
+            source=project,
+            title=form.instance.title
+        )
+
+        return response
+
+
 class AdminProjectDetailView(ActivityContextMixin, DelegateableView, DetailView):
     form_views = [
         CommentFormView,
         CreateApprovalView,
         RejectionView,
+        RemoveDocumentView,
         SendForApprovalView,
         UpdateLeadView,
+        UploadDocumentView,
     ]
     model = Project
     template_name_suffix = '_admin_detail'
@@ -120,12 +173,24 @@ class AdminProjectDetailView(ActivityContextMixin, DelegateableView, DetailView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['approvals'] = self.object.approvals.distinct('by')
-        context['remaining_document_categories'] = DocumentCategory.objects.all()
+        context['remaining_document_categories'] = list(self.object.get_missing_document_categories())
         return context
 
 
-class ApplicantProjectDetailView(DetailView):
+class ApplicantProjectDetailView(ActivityContextMixin, DelegateableView, DetailView):
+    form_views = [
+        CommentFormView,
+    ]
+
     model = Project
+    template_name_suffix = '_applicant_detail'
+
+    def dispatch(self, request, *args, **kwargs):
+        project = self.get_object()
+        # This view is only for applicants.
+        if project.user != request.user:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
 
 
 class ProjectDetailView(ViewDispatcher):
@@ -133,7 +198,35 @@ class ProjectDetailView(ViewDispatcher):
     applicant_view = ApplicantProjectDetailView
 
 
-@method_decorator(staff_required, name='dispatch')
-class ProjectEditView(UpdateView):
+class ProjectApprovalEditView(UpdateView):
+    form_class = ProjectApprovalForm
+    model = Project
+
+    def dispatch(self, request, *args, **kwargs):
+        project = self.get_object()
+        if not project.editable_by(request.user):
+            messages.info(self.request, _('You are not allowed to edit the project at this time'))
+            return redirect(project)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ApplicantProjectEditView(UpdateView):
     form_class = ProjectEditForm
     model = Project
+
+    def dispatch(self, request, *args, **kwargs):
+        project = self.get_object()
+        # This view is only for applicants.
+        if project.user != request.user:
+            raise PermissionDenied
+
+        if not project.editable_by(request.user):
+            messages.info(self.request, _('You are not allowed to edit the project at this time'))
+            return redirect(project)
+
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ProjectEditView(ViewDispatcher):
+    admin_view = ProjectApprovalEditView
+    applicant_view = ApplicantProjectEditView
