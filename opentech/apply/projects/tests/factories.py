@@ -2,16 +2,19 @@ import decimal
 import json
 
 import factory
+import pytz
 from django.utils import timezone
 
 from opentech.apply.funds.tests.factories import ApplicationSubmissionFactory
 from opentech.apply.projects.models import (
+    Contract,
     DocumentCategory,
     PacketFile,
-    Project,
+    PaymentReceipt,
+    PaymentRequest,
+    Project
 )
 from opentech.apply.users.tests.factories import StaffFactory, UserFactory
-
 
 ADDRESS = {
     'country': 'GB',
@@ -67,6 +70,16 @@ class ProjectFactory(factory.DjangoModelFactory):
         model = Project
 
 
+class ContractFactory(factory.DjangoModelFactory):
+    approver = factory.SubFactory(StaffFactory)
+    project = factory.SubFactory(ProjectFactory)
+
+    file = factory.django.FileField()
+
+    class Meta:
+        model = Contract
+
+
 class PacketFileFactory(factory.DjangoModelFactory):
     category = factory.SubFactory(DocumentCategoryFactory)
     project = factory.SubFactory(ProjectFactory)
@@ -76,3 +89,25 @@ class PacketFileFactory(factory.DjangoModelFactory):
 
     class Meta:
         model = PacketFile
+
+
+class PaymentRequestFactory(factory.DjangoModelFactory):
+    project = factory.SubFactory(ProjectFactory)
+    by = factory.SubFactory(UserFactory)
+
+    date_from = factory.Faker('date_time').generate({'tzinfo': pytz.utc})
+    date_to = factory.Faker('date_time').generate({'tzinfo': pytz.utc})
+
+    invoice = factory.django.FileField()
+
+    class Meta:
+        model = PaymentRequest
+
+
+class PaymentReceiptFactory(factory.DjangoModelFactory):
+    payment_request = factory.SubFactory(PaymentRequestFactory)
+
+    file = factory.django.FileField()
+
+    class Meta:
+        model = PaymentReceipt

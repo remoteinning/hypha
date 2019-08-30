@@ -3,19 +3,37 @@ import decimal
 import json
 import logging
 
-from addressfield.fields import ADDRESS_FIELDS_ORDER
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import ugettext as _
+from wagtail.contrib.settings.models import BaseSetting, register_setting
 
+from addressfield.fields import ADDRESS_FIELDS_ORDER
+from opentech.apply.activity.messaging import MESSAGES, messenger
 from opentech.apply.utils.storage import PrivateStorage
 
-
 logger = logging.getLogger(__name__)
+
+
+def contract_path(instance, filename):
+    return f'projects/{instance.project_id}/contracts/{filename}'
+
+
+def document_path(instance, filename):
+    return f'projects/{instance.project_id}/supporting_documents/{filename}'
+
+
+def invoice_path(instance, filename):
+    return f'projects/{instance.project_id}/payment_invoices/{filename}'
+
+
+def receipt_path(instance, filename):
+    return f'projects/{instance.payment_request.project_id}/payment_receipts/{filename}'
 
 
 class Approval(models.Model):
@@ -31,8 +49,18 @@ class Approval(models.Model):
         return f'Approval of "{self.project.title}" by {self.by}'
 
 
-def document_path(instance, filename):
-    return f'projects/{instance.project_id}/supporting_documents/{filename}'
+class Contract(models.Model):
+    approver = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='contracts')
+    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contracts")
+
+    file = models.FileField(upload_to=contract_path)
+
+    is_signed = models.BooleanField("Signed?", default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        state = 'Signed' if self.is_signed else 'Unsigned'
+        return f'Contract for {self.project} ({state})'
 
 
 class PacketFile(models.Model):
@@ -58,14 +86,80 @@ class PacketFile(models.Model):
         return RemoveDocumentForm(instance=self)
 
 
+class PaymentApproval(models.Model):
+    request = models.ForeignKey('PaymentRequest', on_delete=models.CASCADE, related_name="approvals")
+    by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payment_approvals")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Approval for {self.request} by {self.by}'
+
+
+class PaymentReceipt(models.Model):
+    payment_request = models.ForeignKey("PaymentRequest", on_delete=models.CASCADE, related_name="receipts")
+
+    file = models.FileField(upload_to=receipt_path, storage=PrivateStorage())
+
+    def __str__(self):
+        return f'Receipt for {self.payment_request}'
+
+
+SUBMITTED = 'submitted'
+CHANGES_REQUESTED = 'changes_requested'
+UNDER_REVIEW = 'under_review'
+PAID = 'paid'
+DECLINED = 'declined'
+REQUEST_STATUS_CHOICES = [
+    (SUBMITTED, 'Submitted'),
+    (CHANGES_REQUESTED, 'Changes Requested'),
+    (UNDER_REVIEW, 'Under Review'),
+    (PAID, 'Paid'),
+    (DECLINED, 'Declined'),
+]
+
+
+class PaymentRequest(models.Model):
+    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="payment_requests")
+    by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payment_requests")
+
+    invoice = models.FileField(upload_to=invoice_path, storage=PrivateStorage())
+    value = models.DecimalField(
+        default=0,
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(decimal.Decimal('0.01'))],
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    date_from = models.DateTimeField()
+    date_to = models.DateTimeField()
+    comment = models.TextField()
+    status = models.TextField(choices=REQUEST_STATUS_CHOICES, default=SUBMITTED)
+
+    def __str__(self):
+        return f'Payment requested for {self.project}'
+
+    def user_can_delete(self, user):
+        if user.is_apply_staff:
+            return False  # Staff can reject
+
+        if self.status not in (SUBMITTED, CHANGES_REQUESTED):
+            return False
+
+        return True
+
+
 COMMITTED = 'committed'
 CONTRACTING = 'contracting'
+IN_PROGRESS = 'in_progress'
+CLOSING = 'closing'
+COMPLETE = 'complete'
 PROJECT_STATUS_CHOICES = [
     (COMMITTED, 'Committed'),
     (CONTRACTING, 'Contracting'),
-    ('in_progress', 'In Progress'),
-    ('closing', 'Closing'),
-    ('complete', 'Complete'),
+    (IN_PROGRESS, 'In Progress'),
+    (CLOSING, 'Closing'),
+    (COMPLETE, 'Complete'),
 ]
 
 
@@ -104,6 +198,8 @@ class Project(models.Model):
         related_query_name='project',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    sent_to_compliance_at = models.DateTimeField(null=True)
 
     def __str__(self):
         return self.title
@@ -175,6 +271,12 @@ class Project(models.Model):
     def can_make_approval(self):
         return self.is_locked and self.status == COMMITTED
 
+    def can_request_funding(self):
+        """
+        Should we show this Project's funding block?
+        """
+        return self.status in (CLOSING, IN_PROGRESS)
+
     @property
     def can_send_for_approval(self):
         """
@@ -186,6 +288,10 @@ class Project(models.Model):
         """
         correct_state = self.status == COMMITTED and not self.is_locked
         return correct_state and self.user_has_updated_details
+
+    @property
+    def requires_approval(self):
+        return not self.approvals.exists()
 
     def get_missing_document_categories(self):
         """
@@ -204,6 +310,28 @@ class Project(models.Model):
                     'category': category,
                     'difference': difference,
                 }
+
+    @property
+    def is_in_progress(self):
+        return self.status == IN_PROGRESS
+
+    def send_to_compliance(self, request):
+        """Notify Compliance about this Project."""
+
+        messenger(
+            MESSAGES.SENT_TO_COMPLIANCE,
+            request=request,
+            user=request.user,
+            source=self,
+        )
+
+        self.sent_to_compliance_at = timezone.now()
+        self.save(update_fields=['sent_to_compliance_at'])
+
+
+@register_setting
+class ProjectSettings(BaseSetting):
+    compliance_email = models.TextField("Compliance Email")
 
 
 class DocumentCategory(models.Model):
