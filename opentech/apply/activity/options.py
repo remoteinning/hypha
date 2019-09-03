@@ -43,6 +43,7 @@ class MESSAGES(Enum):
     UPDATE_PAYMENT_REQUEST = 'Updated Payment Request'
     PROJECT_MOVED_TO_CLOSING = 'Project moved to Closing'
     PROJECT_MOVED_TO_CLOSED = 'Project Closed'
+    PROJECT_MOVED_TO_IN_PROGRESS = 'Project moved to In Progress'
 
     @classmethod
     def choices(cls):

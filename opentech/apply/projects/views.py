@@ -39,6 +39,7 @@ from .forms import (
     ClosingForm,
     CreateApprovalForm,
     EditPaymentRequestForm,
+    InProgressForm,
     ProjectApprovalForm,
     ProjectEditForm,
     RejectionForm,
@@ -403,6 +404,25 @@ class MoveToClosingView(DelegatedViewMixin, UpdateView):
 
 
 @method_decorator(staff_required, name='dispatch')
+class MoveToInProgressView(DelegatedViewMixin, UpdateView):
+    context_name = 'in_progress_form'
+    form_class = InProgressForm
+    model = Project
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+
+        messenger(
+            MESSAGES.PROJECT_MOVED_TO_IN_PROGRESS,
+            request=self.request,
+            user=self.request.user,
+            source=self.object,
+        )
+
+        return response
+
+
+@method_decorator(staff_required, name='dispatch')
 class RejectionView(DelegatedViewMixin, UpdateView):
     context_name = 'rejection_form'
     form_class = RejectionForm
@@ -632,6 +652,7 @@ class AdminProjectDetailView(
         CreateApprovalView,
         MoveToClosedView,
         MoveToClosingView,
+        MoveToInProgressView,
         RejectionView,
         RemoveDocumentView,
         RequestPaymentView,

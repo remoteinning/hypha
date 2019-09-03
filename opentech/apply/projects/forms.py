@@ -18,6 +18,7 @@ from .models import (
     COMMITTED,
     COMPLETE,
     DECLINED,
+    IN_PROGRESS,
     PAID,
     REQUEST_STATUS_CHOICES,
     SUBMITTED,
@@ -186,6 +187,20 @@ class EditPaymentRequestForm(forms.ModelForm):
             for r in instance.receipts.all()
         ]
         self.fields['requested_value'].label = 'Value'
+
+
+class InProgressForm(forms.ModelForm):
+    class Meta:
+        fields = ['id']
+        model = Project
+        widgets = {'id': forms.HiddenInput()}
+
+    def __init__(self, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self.instance.status = IN_PROGRESS
+        return super().save(*args, **kwargs)
 
 
 class ProjectEditForm(forms.ModelForm):
