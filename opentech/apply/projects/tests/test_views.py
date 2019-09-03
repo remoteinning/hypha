@@ -259,6 +259,29 @@ class TestStaffUploadContractView(BaseViewTestCase):
         self.assertEqual(project.contracts.count(), 1)
         self.assertTrue(project.contracts.first().is_signed)
 
+    def test_cannot_upload_contract_to_closed_project(self):
+        project = ProjectFactory(status=COMPLETE)
+        contract_count = project.contracts.count()
+
+        test_doc = BytesIO(b'somebinarydata')
+        test_doc.name = 'contract.pdf'
+
+        self.client.force_login(StaffFactory())
+
+        response = self.client.post(project.get_absolute_url(), {
+            'form-submitted-contract_form': '',
+            'file': test_doc,
+        }, follow=True, secure=True)
+
+        expected_url = RequestFactory().get('/', secure=True).build_absolute_uri(project.get_absolute_url())
+        self.assertRedirects(response, expected_url)
+
+        project.refresh_from_db()
+        self.assertEqual(project.contracts.count(), contract_count)
+
+        messages = list(response.context['messages'])
+        self.assertEqual(len(messages), 1)
+
 
 class TestUploadDocumentView(BaseViewTestCase):
     base_view_name = 'detail'
@@ -673,6 +696,29 @@ class TestRequestPaymentViewAsStaff(BaseViewTestCase):
         self.assertEqual(project.payment_requests.count(), 1)
 
         self.assertEqual(project.payment_requests.first().by, self.user)
+
+    def test_cannot_request_payment_on_a_closed_project(self):
+        project = ProjectFactory(status=COMPLETE)
+        payment_requests_count = project.payment_requests.count()
+
+        invoice = BytesIO(b'somebinarydata')
+        invoice.name = 'invoice.pdf'
+
+        self.client.force_login(StaffFactory())
+
+        response = self.client.post(project.get_absolute_url(), {
+            'form-submitted-request_payment_form': '',
+            'file': invoice,
+        }, follow=True, secure=True)
+
+        expected_url = RequestFactory().get('/', secure=True).build_absolute_uri(project.get_absolute_url())
+        self.assertRedirects(response, expected_url)
+
+        project.refresh_from_db()
+        self.assertEqual(project.payment_requests.count(), payment_requests_count)
+
+        messages = list(response.context['messages'])
+        self.assertEqual(len(messages), 1)
 
 
 class TestPaymentsMixin(TestCase):

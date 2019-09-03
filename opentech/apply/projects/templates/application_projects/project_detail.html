@@ -165,7 +165,7 @@
                     </a>
                     {% endif %}
 
-                    {% if object.can_request_funding %}
+                    {% if object.can_request_funding and not object.is_closed %}
                     <div class="modal" id="request-payment">
                         <h4 class="modal__header-bar">Request Payment</h4>
                         {% include 'funds/includes/delegated_form_base.html' with form=request_payment_form value='Request'%}

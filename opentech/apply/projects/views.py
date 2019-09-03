@@ -462,6 +462,15 @@ class RequestPaymentView(DelegatedViewMixin, CreateView):
 
         return response
 
+    def post(self, request, *args, **kwargs):
+        project = self.kwargs['object']
+
+        if project.is_closed:
+            messages.error(request, "Payment Requests can't be added to a closed Project")
+            return redirect(project)
+
+        return super().post(request, *args, **kwargs)
+
 
 @method_decorator(login_required, name='dispatch')
 class SelectDocumentView(SubmissionFilesMixin, FormView):
@@ -577,6 +586,15 @@ class UploadContractView(DelegatedViewMixin, CreateView):
         )
 
         return response
+
+    def post(self, request, *args, **kwargs):
+        project = self.kwargs['object']
+
+        if project.is_closed:
+            messages.error(self.request, "Contracts can't be added to a closed Project")
+            return redirect(project)
+
+        return super().post(request, *args, **kwargs)
 
 
 @method_decorator(staff_required, name='dispatch')
