@@ -20,7 +20,13 @@ from ..templatetags.payment_request_tools import (
     can_delete,
     user_can_edit
 )
-from .factories import ContractFactory, PaymentRequestFactory, ProjectFactory
+from ..templatetags.project_tools import user_can_close
+from .factories import (
+    ContractFactory,
+    PaymentRequestFactory,
+    ProjectFactory,
+    UserFactory
+)
 
 
 class TestContractTools(TestCase):
@@ -255,3 +261,19 @@ class TestPaymentRequestTools(TestCase):
 
         self.assertFalse(user_can_edit(payment_request, applicant))
         self.assertFalse(user_can_edit(payment_request, staff))
+
+
+class TestProjectTools(TestCase):
+    def test_staff_can_close_project(self):
+        project = ProjectFactory(status=IN_PROGRESS)
+        staff = StaffFactory()
+
+        self.assertTrue(user_can_close(project, staff))
+
+    def test_user_cannot_close_project(self):
+        project = ProjectFactory(status=IN_PROGRESS)
+        user = UserFactory()
+        applicant = ApplicantFactory()
+
+        self.assertFalse(user_can_close(project, user))
+        self.assertFalse(user_can_close(project, applicant))

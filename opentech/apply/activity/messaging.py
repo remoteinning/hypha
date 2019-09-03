@@ -226,6 +226,7 @@ class ActivityAdapter(AdapterBase):
         MESSAGES.UPLOAD_CONTRACT: '{user} has uploaded a contract for {source.title}',
         MESSAGES.APPROVE_CONTRACT: '{user} has approved contract for {source.title}',
         MESSAGES.PROJECT_MOVED_TO_CLOSING: 'Project to closing.',
+        MESSAGES.PROJECT_MOVED_TO_CLOSED: 'Project to closed.',
     }
 
     def recipients(self, message_type, **kwargs):
@@ -399,6 +400,7 @@ class SlackAdapter(AdapterBase):
         MESSAGES.DELETE_PAYMENT_REQUEST: '{user} has deleted payment request from <{link}|{source.title}>.',
         MESSAGES.UPDATE_PAYMENT_REQUEST: '{user} has updated payment request for <{link}|{source.title}>.',
         MESSAGES.PROJECT_MOVED_TO_CLOSING: '{user} has moved project to closing <{link}|{source.title}>.',
+        MESSAGES.PROJECT_MOVED_TO_CLOSED: '{user} has moved project to closed <{link}|{source.title}>.',
     }
 
     def __init__(self):

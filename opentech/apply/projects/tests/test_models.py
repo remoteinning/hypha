@@ -7,7 +7,9 @@ from opentech.apply.users.tests.factories import ApplicantFactory, StaffFactory
 
 from ..models import (
     CHANGES_REQUESTED,
+    COMMITTED,
     DECLINED,
+    IN_PROGRESS,
     PAID,
     SUBMITTED,
     UNDER_REVIEW,
@@ -22,6 +24,17 @@ from .factories import (
 
 
 class TestProjectModel(TestCase):
+    def test_cannot_close_in_incorrect_state(self):
+        project = ProjectFactory(status=COMMITTED)
+
+        self.assertFalse(project.can_close)
+
+    def test_cannot_close_with_open_payment_requests(self):
+        project = ProjectFactory(status=IN_PROGRESS)
+        PaymentRequestFactory(project=project, status=SUBMITTED)
+
+        self.assertFalse(project.can_close)
+
     def test_create_from_submission(self):
         submission = ApplicationSubmissionFactory()
 

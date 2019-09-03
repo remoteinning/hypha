@@ -42,6 +42,7 @@ class MESSAGES(Enum):
     SENT_TO_COMPLIANCE = 'Project was sent to Compliance'
     UPDATE_PAYMENT_REQUEST = 'Updated Payment Request'
     PROJECT_MOVED_TO_CLOSING = 'Project moved to Closing'
+    PROJECT_MOVED_TO_CLOSED = 'Project Closed'
 
     @classmethod
     def choices(cls):

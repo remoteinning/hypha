@@ -18,7 +18,7 @@ from opentech.apply.users.tests.factories import (
 from opentech.apply.utils.testing.tests import BaseViewTestCase
 
 from ..forms import SetPendingForm
-from ..models import CONTRACTING, IN_PROGRESS, PAID
+from ..models import CLOSING, COMPLETE, CONTRACTING, IN_PROGRESS, PAID
 from ..views import ContractsMixin, PaymentsMixin, ProjectDetailSimplifiedView
 from .factories import (
     ContractFactory,
@@ -816,3 +816,24 @@ class TestMoveToClosingView(BaseViewTestCase):
 
         project.refresh_from_db()
         self.assertEqual(project.status, CLOSING)
+
+
+class TestMoveToClosedView(BaseViewTestCase):
+    base_view_name = 'detail'
+    url_name = 'funds:projects:{}'
+    user_factory = StaffFactory
+
+    def get_kwargs(self, instance):
+        return {'pk': instance.pk}
+
+    def test_happy_path(self):
+        project = ProjectFactory()
+
+        response = self.post_page(project, {
+            'form-submitted-close_form': '',
+            'id': project.id,
+        })
+        self.assertEqual(response.status_code, 200)
+
+        project.refresh_from_db()
+        self.assertEqual(project.status, COMPLETE)
