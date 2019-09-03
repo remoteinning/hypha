@@ -795,3 +795,24 @@ class TestStaffEditPaymentRequestView(BaseViewTestCase):
         self.assertEqual(project.payment_requests.first().pk, payment_request.pk)
 
         self.assertEqual(requested_value + Decimal("1"), payment_request.requested_value)
+
+
+class TestMoveToClosingView(BaseViewTestCase):
+    base_view_name = 'detail'
+    url_name = 'funds:projects:{}'
+    user_factory = StaffFactory
+
+    def get_kwargs(self, instance):
+        return {'pk': instance.pk}
+
+    def test_happy_path(self):
+        project = ProjectFactory()
+
+        response = self.post_page(project, {
+            'form-submitted-closing_form': '',
+            'id': project.id,
+        })
+        self.assertEqual(response.status_code, 200)
+
+        project.refresh_from_db()
+        self.assertEqual(project.status, CLOSING)

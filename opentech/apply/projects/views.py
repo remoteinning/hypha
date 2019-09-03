@@ -35,6 +35,7 @@ from .files import get_files
 from .forms import (
     ApproveContractForm,
     ChangePaymentRequestStatusForm,
+    ClosingForm,
     CreateApprovalForm,
     EditPaymentRequestForm,
     ProjectApprovalForm,
@@ -363,6 +364,25 @@ class EditPaymentRequestView(UpdateView):
 
 
 @method_decorator(staff_required, name='dispatch')
+class MoveToClosingView(DelegatedViewMixin, UpdateView):
+    context_name = 'closing_form'
+    form_class = ClosingForm
+    model = Project
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+
+        messenger(
+            MESSAGES.PROJECT_MOVED_TO_CLOSING,
+            request=self.request,
+            user=self.request.user,
+            source=self.object,
+        )
+
+        return response
+
+
+@method_decorator(staff_required, name='dispatch')
 class RejectionView(DelegatedViewMixin, UpdateView):
     context_name = 'rejection_form'
     form_class = RejectionForm
@@ -572,6 +592,7 @@ class AdminProjectDetailView(
     form_views = [
         CommentFormView,
         CreateApprovalView,
+        MoveToClosingView,
         RejectionView,
         RemoveDocumentView,
         RequestPaymentView,

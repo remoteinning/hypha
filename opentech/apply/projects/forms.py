@@ -14,6 +14,7 @@ from opentech.apply.users.groups import STAFF_GROUP_NAME
 from .files import get_files
 from .models import (
     CHANGES_REQUESTED,
+    CLOSING,
     COMMITTED,
     DECLINED,
     PAID,
@@ -106,6 +107,20 @@ class ChangePaymentRequestStatusForm(LoopedFormMixin, forms.ModelForm):
             self.add_error('paid_value', 'You can only set a value when moving to the Paid status.')
 
         return cleaned_data
+
+
+class ClosingForm(forms.ModelForm):
+    class Meta:
+        fields = ['id']
+        model = Project
+        widgets = {'id': forms.HiddenInput()}
+
+    def __init__(self, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self.instance.status = CLOSING
+        return super().save(*args, **kwargs)
 
 
 class CreateProjectForm(forms.Form):
