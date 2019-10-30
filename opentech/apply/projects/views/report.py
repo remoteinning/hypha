@@ -6,6 +6,7 @@ from django.views.generic import (
     UpdateView
 )
 
+from opentech.apply.activity.messaging import MESSAGES, messenger
 from opentech.apply.utils.storage import PrivateMediaView
 
 from ..models import Report, ReportConfig
@@ -41,30 +42,40 @@ class ReportUpdateView(ReportAccessMixin, UpdateView):
     def get_success_url(self):
         return self.object.project.get_absolute_url()
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+
+        messenger(
+            MESSAGES.SUBMIT_REPORT,
+            request=self.request,
+            user=self.request.user,
+            source=self.object.project,
+            related=self.object,
+        )
+
+        return response
+
 
 @method_decorator(login_required, name='dispatch')
 class ReportPrivateMedia(UserPassesTestMixin, PrivateMediaView):
     raise_exception = True
 
     def dispatch(self, *args, **kwargs):
-        payment_pk = self.kwargs['pk']
-        self.payment_request = get_object_or_404(PaymentRequest, pk=payment_pk)
+        report_pk = self.kwargs['pk']
+        self.report = get_object_or_404(Report, pk=report_pk)
 
         return super().dispatch(*args, **kwargs)
 
     def get_media(self, *args, **kwargs):
         file_pk = kwargs.get('file_pk')
-        if not file_pk:
-            return self.payment_request.invoice
-
-        receipt = get_object_or_404(self.payment_request.receipts, pk=file_pk)
-        return receipt.file
+        document = get_object_or_404(self.report.files, pk=file_pk)
+        return document.document
 
     def test_func(self):
         if self.request.user.is_apply_staff:
             return True
 
-        if self.request.user == self.payment_request.project.user:
+        if self.request.user == self.report.project.user:
             return True
 
         return False
