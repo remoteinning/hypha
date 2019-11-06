@@ -38,6 +38,7 @@ from ..files import get_files
 from ..filters import (
     PaymentRequestListFilter,
     ProjectListFilter,
+    ReportListFilter,
 )
 from ..forms import (
     ApproveContractForm,
@@ -61,11 +62,13 @@ from ..models import (
     Contract,
     PacketFile,
     PaymentRequest,
-    Project
+    Project,
+    Report,
 )
 from ..tables import (
     PaymentRequestsListTable,
-    ProjectsListTable
+    ProjectsListTable,
+    ReportListTable,
 )
 
 from .report import ReportingMixin, ReportFrequencyUpdate
@@ -435,6 +438,12 @@ class AdminProjectDetailView(
         context = super().get_context_data(**kwargs)
         context['approvals'] = self.object.approvals.distinct('by')
         context['remaining_document_categories'] = list(self.object.get_missing_document_categories())
+
+        if self.object.is_in_progress:
+            context['report_data'] = {
+                'startDate': self.object.report_config.current_due_report().start_date,
+                'projectEndDate': self.object.end_date,
+            }
         return context
 
 
@@ -608,8 +617,17 @@ class ProjectOverviewView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['projects'] = self.get_projects(self.request)
         context['payment_requests'] = self.get_payment_requests(self.request)
+        context['reports'] = self.get_reports(self.request)
         context['status_counts'] = self.get_status_counts()
         return context
+
+    def get_reports(self, request):
+        reports = Report.objects.for_table().submitted()[:10]
+        return {
+            'filterset': ReportListFilter(request.GET or None, request=request, queryset=reports),
+            'table': ReportListTable(reports, order_by=()),
+            'url': reverse('apply:projects:reports:all'),
+        }
 
     def get_payment_requests(self, request):
         payment_requests = PaymentRequest.objects.order_by('date_to')[:10]
